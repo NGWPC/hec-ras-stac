@@ -1,0 +1,1 @@
+# Not Currently Implemented - Enterprise mode has been planned for, but is not fully implemented or tested, in favor of the requested standalone basic deployment pattern.

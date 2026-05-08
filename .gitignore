@@ -1,0 +1,6 @@
+# Terraform local state and provider cache
+deployment/terraform/.terraform/
+deployment/terraform/*.tfstate
+deployment/terraform/*.tfstate.backup
+deployment/terraform/*.tfvars
+deployment/terraform/backend.tf
