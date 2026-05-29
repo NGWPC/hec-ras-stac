@@ -4,3 +4,10 @@ deployment/terraform/*.tfstate
 deployment/terraform/*.tfstate.backup
 deployment/terraform/*.tfvars
 deployment/terraform/backend.tf
+
+# Credentials
+.env
+
+# Python
+__pycache__/
+*.pyc
