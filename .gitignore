@@ -11,3 +11,9 @@ deployment/terraform/backend.tf
 # Python
 __pycache__/
 *.pyc
+
+# Outputs
+dump-reconciliation/outputs
+
+# pgstac Dump
+*.dump
