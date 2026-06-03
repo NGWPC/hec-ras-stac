@@ -44,10 +44,10 @@ Cross-account mode (--via-local):
 
 Usage:
     # Direct S3-to-S3 (default — single cred set in env or --source-profile/--dest-profile)
-    python sync_assets.py --data-root s3://hv-fim-dev-data
+    python sync_assets.py --data-root s3://fimc-data/hv-fim-dev-data
 
     # Cross-account via laptop staging
-    python sync_assets.py --data-root s3://test-hv-fim-dev-data --via-local
+    python sync_assets.py --data-root s3://fimc-data/test-hv-fim-dev-data --via-local
 
     python sync_assets.py ... --dry-run
 """
@@ -237,8 +237,8 @@ def main() -> int:
     )
     parser.add_argument("--workers", type=int, default=32,
                         help="Parallel sync workers (default: 32; use 1 for sequential)")
-    parser.add_argument("--failure-threshold", type=int, default=10,
-                        help="Abort after N item failures (default: 10; 0 = no limit)")
+    parser.add_argument("--failure-threshold", type=int, default=0,
+                        help="Abort after N item failures (default: 0 = no limit)")
     parser.add_argument("--progress-log", default=None,
                         help="Path to live progress log file (default: <working-dir>/sync_assets_progress.log)")
     parser.add_argument("--dry-run", action="store_true")

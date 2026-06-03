@@ -80,13 +80,13 @@ def sync_hash(prefix: str, hash_dir: str, working_dir: Path, profile: Optional[s
     """Sync one hash dir from source to local, flattening stac_items/ out of the path."""
     src = f"s3://{SOURCE_BUCKET}/{SOURCE_PREFIX}/{prefix}/stac_items/{hash_dir}/"
     dst = working_dir / "items" / prefix / hash_dir
-    dst.mkdir(parents=True, exist_ok=True)
     cmd = ["aws", "s3", "sync", src, str(dst) + "/", "--exclude", "*", "--include", "*.json"]
     if profile:
         cmd += ["--profile", profile]
     if dry_run:
         logger.info(f"[DRY RUN] {' '.join(cmd)}")
         return 0
+    dst.mkdir(parents=True, exist_ok=True)
     return subprocess.run(cmd, env=_aws_env_source()).returncode
 
 
@@ -99,13 +99,13 @@ def sync_prefix_whole(prefix: str, working_dir: Path, profile: Optional[str], dr
     """
     src = f"s3://{SOURCE_BUCKET}/{SOURCE_PREFIX}/{prefix}/stac_items/"
     dst = working_dir / "items" / prefix
-    dst.mkdir(parents=True, exist_ok=True)
     cmd = ["aws", "s3", "sync", src, str(dst) + "/", "--exclude", "*", "--include", "*.json"]
     if profile:
         cmd += ["--profile", profile]
     if dry_run:
         logger.info(f"[DRY RUN] {' '.join(cmd)}")
         return 0
+    dst.mkdir(parents=True, exist_ok=True)
     return subprocess.run(cmd, env=_aws_env_source()).returncode
 
 

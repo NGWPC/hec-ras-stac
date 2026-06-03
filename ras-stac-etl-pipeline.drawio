@@ -1,0 +1,108 @@
+<mxfile host="Electron">
+  <diagram name="pipeline-stages" id="jnnHNysFSRlVsxUljkR_">
+    <mxGraphModel dx="2623" dy="749" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-0" />
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-1" parent="xlCPKZdRb0qqn8XQQGQE-0" />
+        <mxCell id="aRo9sGYX7CD9-VMX0scA-2" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="BXJv5aNEaz1l29wsPbXI-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-2" parent="xlCPKZdRb0qqn8XQQGQE-1" style="rounded=1;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="260" width="620" x="139" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="aRo9sGYX7CD9-VMX0scA-0" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="xlCPKZdRb0qqn8XQQGQE-17">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-4" parent="xlCPKZdRb0qqn8XQQGQE-1" style="rounded=1;whiteSpace=wrap;html=1;" value="Sourcing&lt;br&gt;&lt;br&gt;No code&lt;br&gt;1 time operation&lt;br&gt;&lt;br&gt;Owner: Dewberry" vertex="1">
+          <mxGeometry height="120" width="120" x="-160" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-6" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="Create STAC Artifacts&lt;br&gt;item.json&lt;br&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;Ripple1D&lt;br&gt;&lt;br&gt;Owner: Entarian&lt;/div&gt;" vertex="1">
+          <mxGeometry height="125" width="120" x="619" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-7" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="xlCPKZdRb0qqn8XQQGQE-13">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-8" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="DATA enrichment&lt;br&gt;GPKG&lt;br&gt;&lt;br&gt;Ripple1D&lt;div&gt;&lt;br&gt;Owner: Entarian&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="120" x="308" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-9" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="xlCPKZdRb0qqn8XQQGQE-10" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-10" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="STAC Setup&lt;br&gt;&lt;br&gt;hec-ras-stac/deployment&lt;br&gt;&lt;br&gt;Owner: Entarian" vertex="1">
+          <mxGeometry height="80" width="170" x="957" y="660" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-11" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="Ingestion&lt;br&gt;&lt;br&gt;hec-ras-stac/ingestion&lt;br&gt;&lt;br&gt;Owner: Entarian" vertex="1">
+          <mxGeometry height="80" width="170" x="957" y="870" as="geometry" />
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-3" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="xlCPKZdRb0qqn8XQQGQE-6">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-13" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="DATA enrichment&lt;br&gt;Thumbnail&lt;br&gt;&lt;br&gt;&lt;div&gt;Ripple1D&lt;/div&gt;&lt;div&gt;&lt;br&gt;Owner: Entarian&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="120" x="468" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-14" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="xlCPKZdRb0qqn8XQQGQE-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="aRo9sGYX7CD9-VMX0scA-1" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" source="xlCPKZdRb0qqn8XQQGQE-17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="xlCPKZdRb0qqn8XQQGQE-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-17" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="Organizing Data to a Storage and STAC Format Ready for Delivery&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;No code&lt;br&gt;1 time operation&lt;br&gt;&lt;br&gt;Owner: Dewberry&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150" width="120" x="-10" y="715" as="geometry" />
+        </mxCell>
+        <mxCell id="xlCPKZdRb0qqn8XQQGQE-15" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="DATA enrichment&lt;br&gt;CRS&lt;br&gt;&lt;br&gt;crs-inference&lt;br&gt;&lt;div&gt;&lt;br&gt;Owner: Dewberry&lt;/div&gt;" vertex="1">
+          <mxGeometry height="120" width="120" x="155" y="730" as="geometry" />
+        </mxCell>
+        <mxCell id="BXJv5aNEaz1l29wsPbXI-2" parent="xlCPKZdRb0qqn8XQQGQE-1" style="whiteSpace=wrap;html=1;rounded=1;" value="Create STAC Artifacts&lt;br&gt;collection.json&lt;br&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;div&gt;potential: hec-ras-stac/ingestion&lt;br&gt;&lt;br&gt;Owner: Entarian&lt;/div&gt;" vertex="1">
+          <mxGeometry height="150" width="120" x="810" y="714" as="geometry" />
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-0" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Future: ffrd/hec-stac" vertex="1">
+          <mxGeometry height="30" width="130" x="303" y="875" as="geometry" />
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Future: ffrd/hec-stac" vertex="1">
+          <mxGeometry height="30" width="130" x="463" y="875" as="geometry" />
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-2" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Future: ffrd/hec-stac" vertex="1">
+          <mxGeometry height="30" width="130" x="613" y="875" as="geometry" />
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-4" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="endArrow=none;dashed=1;html=1;dashPattern=1 3;strokeWidth=2;rounded=0;horizontal=0;" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="781" y="966" as="sourcePoint" />
+            <mxPoint x="781" y="606" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="D6wLqyCcAWOgufZuUQ1u-5" connectable="0" parent="D6wLqyCcAWOgufZuUQ1u-4" style="edgeLabel;html=1;align=center;verticalAlign=top;resizable=0;points=[];horizontal=0;" value="Handover Boundary" vertex="1">
+          <mxGeometry relative="1" x="0.3201" y="3" as="geometry">
+            <mxPoint x="-8" y="61" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-0" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="shape=flexArrow;endArrow=classic;html=1;rounded=0;fillColor=#d5e8d4;strokeColor=#82b366;">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="-210" y="1090" as="sourcePoint" />
+            <mxPoint x="130" y="1090" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;" value="Extract" vertex="1">
+          <mxGeometry height="20" width="100" x="-150" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-2" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="shape=flexArrow;endArrow=classic;html=1;rounded=0;fillColor=#f8cecc;strokeColor=#b85450;">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="130" y="1090" as="sourcePoint" />
+            <mxPoint x="780" y="1090" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-3" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;" value="Transform" vertex="1">
+          <mxGeometry height="20" width="100" x="350" y="1080" as="geometry" />
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-4" edge="1" parent="xlCPKZdRb0qqn8XQQGQE-1" style="shape=flexArrow;endArrow=classic;html=1;rounded=0;fillColor=#fff2cc;strokeColor=#d6b656;">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="790" y="1090" as="sourcePoint" />
+            <mxPoint x="1130" y="1090" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="dFDsGva6ssQcGlhYfMrc-5" parent="xlCPKZdRb0qqn8XQQGQE-1" style="text;html=1;align=center;verticalAlign=middle;fontStyle=1;" value="Load" vertex="1">
+          <mxGeometry height="20" width="100" x="875" y="1080" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

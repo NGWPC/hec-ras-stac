@@ -1,13 +1,13 @@
 """
-HEC-RAS STAC Migration — Orchestrator
+HEC-RAS STAC Migration - Orchestrator
 
 Runs the six migration phases in order:
-  1. sync_items.py            — item JSONs from Dewberry → local (source shape)
-  2. generate_collections.py  — fetch + write collection.json files locally
-  3. generate_catalog.py      — write top-level catalog.json
-  4. rewrite_hrefs.py         — rewrite hrefs + restructure items source → destination
-  5. upload_to_s3.py          — push local tree → destination STAC bucket
-  6. sync_assets.py           — per-item assets from Dewberry → dest data bucket
+  1. sync_items.py            - item JSONs from Dewberry -> local (source shape)
+  2. generate_collections.py  - fetch + write collection.json files locally
+  3. generate_catalog.py      - write top-level catalog.json
+  4. rewrite_hrefs.py         - rewrite hrefs + restructure items source -> destination
+  5. upload_to_s3.py          - push local tree -> destination STAC bucket
+  6. sync_assets.py           - per-item assets from Dewberry -> dest data bucket
 
 Phase ordering: Phase 4 MUST run before 5 and 6 (sets original_source_* provenance props).
 
@@ -19,8 +19,8 @@ Subset modes (mutually exclusive):
 Override working dir with WORKING_DIR=<path>.
 
 Credential modes (auto-detected):
-  Single-cred: one set of AWS_* keys — use for same-account runs
-  Dual-cred:   SOURCE_AWS_* + DEST_AWS_* — cross-account subset validation only;
+  Single-cred: one set of AWS_* keys - use for same-account runs
+  Dual-cred:   SOURCE_AWS_* + DEST_AWS_* - cross-account subset validation only;
                requires VIA_LOCAL=1 for Phase 6
 
 Usage:
@@ -42,7 +42,7 @@ ENV_FILE = REPO_ROOT / ".env"
 def load_env(env_file: Path) -> None:
     """Load key=value pairs from .env into os.environ (skips comments and blanks)."""
     if not env_file.exists():
-        print(f"Note: {env_file} not found — relying on existing AWS env vars or default profile")
+        print(f"Note: {env_file} not found - relying on existing AWS env vars or default profile")
         return
     print(f"Loading credentials from {env_file}")
     for line in env_file.read_text().splitlines():
@@ -71,9 +71,9 @@ def run(cmd: list[str]) -> None:
 
 def banner(text: str) -> None:
     print()
-    print("═" * 64)
+    print("=" * 64)
     print(text)
-    print("═" * 64)
+    print("=" * 64)
 
 
 def main() -> None:
@@ -86,6 +86,7 @@ def main() -> None:
 
     items_from = os.environ.get("ITEMS_FROM")
     subset = os.environ.get("SUBSET")
+    whole_tree = os.environ.get("WHOLE_TREE")
     dry_run = os.environ.get("DRY_RUN")
     via_local = os.environ.get("VIA_LOCAL")
     source_profile = os.environ.get("SOURCE_PROFILE")
@@ -117,28 +118,29 @@ def main() -> None:
     source_profile_flag = ["--source-profile", source_profile] if source_profile else []
     dest_profile_flag = ["--dest-profile", dest_profile] if dest_profile else []
     subset_flag = ["--subset", subset] if subset else []
+    whole_tree_flag = ["--whole-tree"] if whole_tree and not items_from and not subset else []
     items_from_flag = ["--items-from", items_from] if items_from else []
     via_local_flag = ["--via-local"] if via_local else []
 
-    banner("Phase 1/6 — Sync items locally (uses source creds)")
-    run([python, "sync_items.py"] + working_dir_flag + source_profile_flag + subset_flag + items_from_flag + dry_run_flag)
+    banner("Phase 1/6 - Sync items locally (uses source creds)")
+    run([python, "sync_items.py"] + working_dir_flag + source_profile_flag + subset_flag + whole_tree_flag + items_from_flag + dry_run_flag)
 
-    banner("Phase 2/6 — Generate collection metadata")
+    banner("Phase 2/6 - Generate collection metadata")
     run([python, "generate_collections.py"] + working_dir_flag + dry_run_flag)
 
-    banner("Phase 3/6 — Generate top-level catalog.json")
+    banner("Phase 3/6 - Generate top-level catalog.json")
     run([python, "generate_catalog.py"] + working_dir_flag + ["--new-stac-url", stac_api_url] + dry_run_flag)
 
-    banner("Phase 4/6 — Rewrite asset HREFs + restructure items source→destination")
+    banner("Phase 4/6 - Rewrite asset HREFs + restructure items source->destination")
     run([python, "rewrite_hrefs.py"] + working_dir_flag + ["--data-root", data_root] + dry_run_flag)
 
-    banner("Phase 5/6 — Upload local tree (uses dest creds)")
+    banner("Phase 5/6 - Upload local tree (uses dest creds)")
     run([python, "upload_to_s3.py"] + working_dir_flag + ["--stac-root", stac_root] + dest_profile_flag + dry_run_flag)
 
     if via_local:
-        banner("Phase 6/6 — Sync assets via local staging (source creds + dest creds)")
+        banner("Phase 6/6 - Sync assets via local staging (source creds + dest creds)")
     else:
-        banner("Phase 6/6 — Sync assets direct S3-to-S3")
+        banner("Phase 6/6 - Sync assets direct S3-to-S3")
     run([python, "sync_assets.py"] + working_dir_flag + ["--data-root", data_root]
         + source_profile_flag + dest_profile_flag + via_local_flag + dry_run_flag)
 

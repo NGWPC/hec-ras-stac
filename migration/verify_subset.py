@@ -30,7 +30,7 @@ ENV_FILE = REPO_ROOT / ".env"
 
 def load_env(env_file: Path) -> None:
     if not env_file.exists():
-        print(f"Note: {env_file} not found — relying on existing AWS env vars")
+        print(f"Note: {env_file} not found - relying on existing AWS env vars")
         return
     print(f"Loading credentials from {env_file}")
     for line in env_file.read_text().splitlines():
@@ -43,9 +43,9 @@ def load_env(env_file: Path) -> None:
 
 
 def promote_dest_creds() -> None:
-    """In dual-cred mode, promote DEST_AWS_* → AWS_* for verification."""
+    """In dual-cred mode, promote DEST_AWS_* -> AWS_* for verification."""
     if os.environ.get("SOURCE_AWS_ACCESS_KEY_ID") and os.environ.get("DEST_AWS_ACCESS_KEY_ID"):
-        print("Dual-cred mode detected — promoting DEST_AWS_* → AWS_* for verification")
+        print("Dual-cred mode detected - promoting DEST_AWS_* -> AWS_* for verification")
         os.environ["AWS_ACCESS_KEY_ID"] = os.environ["DEST_AWS_ACCESS_KEY_ID"]
         os.environ["AWS_SECRET_ACCESS_KEY"] = os.environ["DEST_AWS_SECRET_ACCESS_KEY"]
         token = os.environ.get("DEST_AWS_SESSION_TOKEN")
@@ -84,7 +84,7 @@ def s3_ls_dirs(prefix: str) -> list[str]:
 
 
 def check_link_chain(stac_prefix: str) -> bool:
-    """Validate root → program → collection → item link chain. Returns True if PASS."""
+    """Validate root -> program -> collection -> item link chain. Returns True if PASS."""
     errors = []
     warnings = []
 
@@ -142,11 +142,11 @@ def check_link_chain(stac_prefix: str) -> bool:
         print(f"  WARN:  {w}")
 
     if not errors:
-        print(f"  PASS — link chain intact ({len(programs_with_catalog)} programs, "
+        print(f"  PASS - link chain intact ({len(programs_with_catalog)} programs, "
               f"{len(collections_linked)} collections, {item_count} items)")
         return True
     else:
-        print(f"  FAIL — {len(errors)} link-chain error(s)")
+        print(f"  FAIL - {len(errors)} link-chain error(s)")
         return False
 
 
@@ -239,7 +239,7 @@ def main() -> None:
     print("mip_03050110/McKenzie_Creek_Tributary_2/ (bucket A, mip_70 source):")
     aws("s3", "ls", f"{data_prefix}/mip_03050110/McKenzie_Creek_Tributary_2/", "--recursive")
 
-    hr("6. Catalog link-chain validation (root → program → collection → item)")
+    hr("6. Catalog link-chain validation (root -> program -> collection -> item)")
     link_chain_ok = check_link_chain(stac_prefix)
 
     hr("7. Asset HREF resolution check (every asset HREF should resolve to a real S3 object)")
@@ -248,9 +248,9 @@ def main() -> None:
     hr("Done. Expected results:")
     print("""  STAC bucket:
     - 1 root catalog.json + 3 program catalog.json (ble/mip/ohio_rfc)
-    - 7 collection.json + item.json per surviving item
-    - Total: ~19 STAC objects; ohio_rfc has 1 item (bucket D)
-    - 4 items skipped via drop_list.txt; 6 survive at destination
+    - 7 collection.json files; 8 item.json files (mip_no_crs has 2 items)
+    - Total: 19 STAC objects; ohio_rfc has 1 item (bucket D)
+    - 4 items skipped via drop_list.txt; 8 items survive at destination (subset_items.txt has 10 hashes, 2 hashes have 2 items each)
   Data bucket:
     - Per-item dir contains the model files (+ thumbnail.png + .gpkg where present)
   HREF resolution:

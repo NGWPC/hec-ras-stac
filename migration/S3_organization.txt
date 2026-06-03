@@ -1,0 +1,203 @@
+HEC-RAS STAC — S3 Layout (mirrors Benchmark)
+============================================
+
+Two destination roots, clean separation: STAC root holds pure metadata (JSON
+only), data root holds all assets (model files, thumbnails, gpkgs). Each root
+can be either a bare bucket (s3://hv-fim-dev-stac) or a bucket+prefix
+(s3://fimc-data/test-hv-fim-dev-stac). The migration scripts append
+/hec-ras-stac/... or /hec-ras/... after the root.
+
+The STAC bucket follows the STAC static-catalog convention: a root
+catalog.json links to per-program parent catalogs (ble/, mip/, ohio_rfc/),
+each of which links to its Collections. Items within each Collection
+live in their own folder so per-item sidecars (extension docs, additional
+metadata) can sit alongside the item JSON without crowding the collection
+root. This mirrors Benchmark's layout exactly — see "Per-item folder"
+below for the rationale.
+
+The data bucket is flat at the collection level — assets live under
+`hec-ras/<collection-id>/<item-id>/`. Mirrors Benchmark's
+`benchmark/<collection-id>/<item-id>/` pattern.
+
+Configuration env vars (in migrate.py and subset_test_steps.md):
+  STAC_ROOT — full S3 URI for the STAC metadata destination
+  DATA_ROOT — full S3 URI for the asset destination
+
+
+s3://hv-fim-dev-stac/
+  ├── hec-ras-stac/                              ← HEC-RAS metadata only (JSONs)
+  │   ├── catalog.json                           ← root catalog (children = program catalogs)
+  │   ├── ble/
+  │   │   ├── catalog.json                       ← program catalog
+  │   │   ├── ble_05119_Pulaski/
+  │   │   │   ├── collection.json
+  │   │   │   └── <item-id>/<item-id>.json
+  │   │   └── ... (113 ble_* collections)
+  │   ├── mip/
+  │   │   ├── catalog.json
+  │   │   ├── mip_12090301/
+  │   │   └── ... (1,026 mip_* collections)
+  │   ├── ohio_rfc/                              (catalog.json + ohio_rfc/ohio_rfc/)
+  │
+  └── benchmark-stac/                            ← (unrelated — BenchmarkCat reference)
+      ├── catalog.json                           ← root catalog (8 child links)
+      ├── ble-collection/
+      │   ├── collection.json
+      │   └── <item-id>/<item-id>.json
+      ├── gfm-collection/
+      │   ├── collection.json
+      │   └── <item-id>/<item-id>.json
+      ├── gfm-expanded-collection/
+      ├── hwm-collection/
+      ├── iceye-collection/
+      ├── nws-fim-collection/
+      ├── ripple-fim-collection/
+      └── usgs-fim-collection/
+
+
+s3://hv-fim-dev-data/
+  ├── hec-ras/                                   ← HEC-RAS assets
+  │   └── <collection-id>/<item-id>/
+  │         ├── thumbnail.png
+  │         ├── <item-id>.gpkg
+  │         ├── <model>.prj
+  │         ├── <model>.g01
+  │         ├── <model>.p01
+  │         ├── <model>.f01
+  │         ├── <model>.hdf
+  │         └── ... (all flat in one dir; MODELING/ nesting preserved
+  │                  verbatim from source_models/ where it exists)
+  │
+  └── benchmark/                                 ← (unrelated — BenchmarkCat reference)
+      ├── shared-assets/                         ← cross-collection GPKGs, PDFs, parquet caches
+      │   ├── WBDHU8_webproj.gpkg                (shared HUC8 boundaries)
+      │   ├── gfm_data_readme.pdf
+      │   └── *.parquet                          (derived-asset caches)
+      ├── backups/                               ← PostgreSQL pgstac dumps
+      ├── ble-collection/<item-id>/
+      ├── gfm-collection/<item-id>/
+      │   └── S1A_IW_GRDH_[...]/                 (Sentinel-1 scene id)
+      │       ├── *_ENSEMBLE_FLOOD_*.tif
+      │       ├── *_ENSEMBLE_UNCERTAINTY_*.tif
+      │       └── *_ADVFLAG_*.tif
+      ├── iceye-collection/<item-id>/            (ICEYE_FSD-[...] scenes)
+      └── ... (5 more collections, one dir each)
+
+
+Source (Dewberry — for reference, not modified)
+-----------------------------------------------
+s3://fimc-data/dewberry-stac/
+  ├── ebfe/
+  │   ├── stac_items/<hash>/<item-id>.json + thumbnail.png + .gpkg
+  │   └── source_models/<hash>/<model-files>
+  ├── mip_30/
+  │   ├── stac_items/<hash>/<item-id>.json + Thumbnail.png + .gpkg
+  │   └── source_models/<hash>/<model-files>      (MODELING/ subdirs in some hashes)
+  └── mip_70/
+      ├── stac_items/<hash>/<item-id>.json        (no thumbnail in many hashes)
+      └── source_models/<hash>/<model-files>
+
+The source layout's <prefix>/<hash>/ shape is an artifact of the
+Dewberry pipeline. It is NOT carried into the destination — items are
+organized by their collection at the destination, and the hash is dropped
+from the path. Within-collection id collisions cannot occur in the
+surviving migrated set: the dump-reconciliation pre-flight drops every
+local item that would produce a (collection, id) pair the dump doesn't
+already publish uniquely.
+
+Source-prefix counts are uneven (ebfe/mip_30/mip_70 are Dewberry pipeline
+versions, not programs). Many cataloged collections — including
+mip_no_crs — span both mip_30 and mip_70. The destination layout collapses
+that distinction: items from any source prefix land under the same
+<collection-id>/ at the destination.
+
+
+Per-item folder convention (why <item-id>/<item-id>.json)
+---------------------------------------------------------
+
+Each STAC Item lives inside its own folder under the collection:
+
+    <collection-id>/<item-id>/<item-id>.json
+
+rather than directly as `<collection-id>/<item-id>.json`. Three reasons:
+
+1. STAC static-catalog convention. Matches the STAC spec best-practices
+   recommendation that an Item's `self` link be a sibling URL to any
+   per-item sidecars (extension docs, additional metadata, etc.). The
+   folder gives each item its own namespace so future per-item additions
+   don't collide with peers in the same collection.
+
+2. Mirrors the OWP Benchmark layout. OWP already operates a
+   `benchmark-stac/<collection-id>/<item-id>/<item-id>.json` tree for
+   the Benchmark catalog. Keeping HEC-RAS on the same convention means
+   one mental model for both catalogs and consistent tooling.
+
+3. STAC Browser, stac-fastapi, and ad-hoc S3 walkers all navigate the
+   per-item folder shape natively — `<collection-id>/` listing yields a
+   small set of <item-id>/ directory prefixes plus one collection.json,
+   each item dir resolves cleanly to a single JSON.
+
+The source S3 export at s3://fimc-data/dewberry-stac/ does NOT have
+collection.json or per-item folder structure — Dewberry kept the catalog
+graph in pgstac and only exported raw item JSONs + assets to S3. The
+migration writes the missing Catalog/Collection JSONs explicitly so the
+destination is a complete, standalone, statically-browsable STAC tree.
+
+Why per-program parent Catalogs (ble/ mip/ ohio_rfc/)?
+----------------------------------------------------------
+The destination adds one Catalog level between the root and the
+Collections, grouping Collections by RAS program (ble/, mip/, ohio_rfc/).
+HEC-RAS has ~1,140 Collections — significantly more than the ~8
+Benchmark has — and a flat root catalog of 1,140 children is difficult 
+to navigate in STAC Browser. The parent Catalogs cut the top-level
+child list down to 3 program names.
+
+The grouping is real, not invented. ble (Base Level Engineering),
+mip (Map Information Platform), and ohio_rfc (Ohio River Forecast
+Center) are distinct RAS data sources with different sponsors,
+regulatory roles, and update cadences. ohio_rfc mirrors the same
+program/collection/item nesting as ble and mip — ohio_rfc/ is the
+program Catalog, ohio_rfc/ohio_rfc/ is the Collection, items live
+under that.
+
+This DOES diverge from Benchmark's layout — Benchmark's 8 Collections
+sit flat under the root because that count is manageable. The
+parent-Catalog layer is a HEC-RAS-specific accommodation for the
+1,140-collection scale, not a rejection of the Benchmark convention.
+ebfe / mip_30 / mip_70 (Dewberry ingestion prefixes) are still
+stripped at the destination — only the program-level groupings
+appear, and they are STAC Catalog entities, not Collections.
+
+Classification rule (per the rename of items at migration time):
+  ble_*       → ble/<collection-id>/...
+  mip_*       → mip/<collection-id>/...
+  ohio_rfc    → ohio_rfc/ohio_rfc/...
+
+
+HREF transformation rules
+-------------------------
+Migration rewrites asset HREFs in item JSONs only. Source HREFs use the legacy
+Dewberry alias s3://fim/ (not the actual fimc-data/dewberry-stac bucket).
+
+  Source                                                       Destination
+  ──────                                                       ───────────
+  s3://fim/<prefix>/source_models/<hash>/<file>          →     s3://hv-fim-dev-data/hec-ras/<collection-id>/<item-id>/<file>
+  s3://fim/<prefix>/stac_items/<hash>/<file>             →     s3://hv-fim-dev-data/hec-ras/<collection-id>/<item-id>/<file>
+  https://fim.s3.amazonaws.com//<prefix>/stac_items/<hash>/<file>
+                                                         →     s3://hv-fim-dev-data/hec-ras/<collection-id>/<item-id>/<file>
+
+Both source_models/<hash>/ and stac_items/<hash>/ flatten into the SAME data
+bucket destination. Collision-checked across the full source: 0 filename
+collisions between the two sections within any hash.
+
+Item JSON `collection` field: persisted as-is from source. Items where
+the field is null/missing in the local export are filtered out by the
+dump-reconciliation pre-flight (their dump counterpart is what migrates),
+so no surviving item reaches rewrite_hrefs.py with a null collection.
+
+Item id: persisted as-is from source. The drop-list pre-flight
+guarantees no within-collection id collisions in the surviving set, so
+no id rewrite is needed.
+
+Item `links` arrays: not rewritten. stac-fastapi regenerates them at serve
+time based on the request host.
