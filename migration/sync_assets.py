@@ -49,6 +49,11 @@ Usage:
     # Cross-account via laptop staging
     python sync_assets.py --data-root s3://fimc-data/test-hv-fim-dev-data --via-local
 
+    # Retry only the items that failed a prior run (low concurrency to avoid
+    # the Windows aws-CLI crashes seen under 32 workers). Outputs go to
+    # sync_assets_{failed,missing}_retry.tsv so the input list is preserved.
+    python sync_assets.py --data-root s3://... --failed-tsv sync_assets_failed.tsv --workers 4
+
     python sync_assets.py ... --dry-run
 """
 
@@ -141,6 +146,25 @@ def enumerate_items(items_dir: Path) -> list[tuple[Path, str, str, str, str]]:
                            "(run rewrite_hrefs.py first)")
             continue
         rows.append((path, collection_id, item_id, src_prefix, src_hash_dir))
+    return rows
+
+
+def load_failed_rows(tsv_path: Path) -> list[tuple[Path, str, str, str, str]]:
+    """Load a retry list from a failed/missing/triaged TSV into enumerate_items' row shape.
+
+    Accepts either separate source_prefix/source_hash_dir columns (failed.tsv,
+    missing.tsv) or a combined `source` column of "prefix/hash_dir"
+    (gaps_triaged.tsv). The sync loop ignores row[0], so a placeholder is used.
+    """
+    rows = []
+    with tsv_path.open(encoding="utf-8") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        for r in reader:
+            if r.get("source_prefix") and r.get("source_hash_dir"):
+                prefix, hash_dir = r["source_prefix"], r["source_hash_dir"]
+            else:
+                prefix, _, hash_dir = r["source"].partition("/")
+            rows.append((tsv_path, r["collection"], r["item_id"], prefix, hash_dir))
     return rows
 
 
@@ -241,12 +265,15 @@ def main() -> int:
                         help="Abort after N item failures (default: 0 = no limit)")
     parser.add_argument("--progress-log", default=None,
                         help="Path to live progress log file (default: <working-dir>/sync_assets_progress.log)")
+    parser.add_argument("--failed-tsv", default=None,
+                        help="Retry only the items in this TSV (collection/item_id/source_prefix/source_hash_dir) "
+                             "instead of walking the items dir. Use with --workers 4 after a crash run.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
     working_dir = Path(args.working_dir).expanduser()
     items_dir = working_dir / "items"
-    if not items_dir.exists():
+    if not args.failed_tsv and not items_dir.exists():
         logger.error(f"Items dir not found: {items_dir}")
         return 1
 
@@ -255,24 +282,38 @@ def main() -> int:
     file_handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(file_handler)
 
+    if args.failed_tsv:
+        logger.info("=" * 60)
+        logger.info(f"=== RETRY RUN: items from {args.failed_tsv} (workers={args.workers}) ===")
+        logger.info("=" * 60)
+
     logger.info(f"Source:      s3://{SOURCE_BUCKET}/{SOURCE_PREFIX}/")
     logger.info(f"Dest:        {args.data_root}/hec-ras/")
-    logger.info(f"Walk:        {items_dir}")
+    logger.info(f"Walk:        {args.failed_tsv if args.failed_tsv else items_dir}")
     logger.info(f"Progress log: {progress_log_path}")
     if args.via_local:
         logger.info(f"Mode:        via-local (staging at {args.staging_dir})")
     else:
         logger.info(f"Mode:        direct S3-to-S3 (workers={args.workers}, failure-threshold={args.failure_threshold or 'none'})")
 
-    rows = enumerate_items(items_dir)
+    if args.failed_tsv:
+        failed_tsv_path = Path(args.failed_tsv).expanduser()
+        if not failed_tsv_path.exists():
+            logger.error(f"Failed TSV not found: {failed_tsv_path}")
+            return 1
+        rows = load_failed_rows(failed_tsv_path)
+        logger.info(f"Retry mode: {len(rows)} items from {failed_tsv_path}")
+    else:
+        rows = enumerate_items(items_dir)
     if not rows:
-        logger.error(f"No destination-layout items found in {items_dir} — run rewrite_hrefs.py first")
+        logger.error(f"No items to sync (check --failed-tsv or run rewrite_hrefs.py first)")
         return 1
 
     logger.info(f"{len(rows)} items to sync")
     staging_root = Path(args.staging_dir).expanduser()
-    missing_log = working_dir / "sync_assets_missing.tsv"
-    failed_log = working_dir / "sync_assets_failed.tsv"
+    suffix = "_retry" if args.failed_tsv else ""
+    missing_log = working_dir / f"sync_assets_missing{suffix}.tsv"
+    failed_log = working_dir / f"sync_assets_failed{suffix}.tsv"
     missing: list[tuple[str, str, str, str]] = []
     failed: list[tuple[str, str, str, str]] = []
     completed = 0

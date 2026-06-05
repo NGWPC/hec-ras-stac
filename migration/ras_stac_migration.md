@@ -1,4 +1,4 @@
-# HEC-RAS STAC Migration Plan
+# HEC-RAS STAC Migration
 
 Migrates the Dewberry HEC-RAS STAC catalog into a target AWS account, backed
 by the same pgSTAC + stac-fastapi + STAC Browser + asset-proxy stack used for
@@ -8,6 +8,12 @@ stood up by the Terraform tree in `../deployment/terraform/`.
 For per-decision rationale (suffix scheme, deferred FEMA rename, etc.) see the
 analysis files in this directory. For the operator walkthrough with verification
 commands, see **`subset_test_steps.md`**.
+
+> **Status: asset migration complete and verified — 158,173 / 158,173 items
+> present on `s3://fimc-data/hv-fim-dev-data/hec-ras/`.** See
+> [Phase 2 — completion record](#phase-2--completion-record) for what was run,
+> the recovery of 33 transfer failures, and the two gotchas (unreliable sync
+> logs; spaces in S3 keys).
 
 ## Overview
 
@@ -224,6 +230,79 @@ aws s3 ls s3://<stac-bucket>/hec-ras-stac/ | head                          # pro
 aws s3 ls s3://<stac-bucket>/hec-ras-stac/mip/ | head                      # mip_* collections
 aws s3 ls s3://<data-bucket>/hec-ras/ --recursive | wc -l                  # large
 ```
+
+### Phase 2 — Completion Record
+
+The asset sync ran on a Windows EC2 and took two runs plus targeted retries to
+land cleanly. Final state, confirmed by querying the destination bucket
+directly (not by trusting the sync logs):
+
+```
+$ python verify_asset_coverage.py --data-root s3://fimc-data/hv-fim-dev-data --full
+  expected items: 158173
+  item folders with >=1 object on dest: 158173
+Coverage: 158173/158173 present, 0 gaps
+FULL COVERAGE — every expected item has assets on the destination.
+```
+
+`verify_migration.py` independently confirms the STAC (metadata) side:
+link-chain PASS (3 programs, 1,139 collections, 158,173 items — every
+root→program→collection→item link intact), and sampled asset HREFs resolve
+0 misses. Both buckets reconcile at 158,173 items.
+
+> **Expected non-failure in `verify_migration.py`:** step 5 (asset-log summary)
+> reports `FAIL asset_logs` because it reads `sync_assets_failed.tsv`, which
+> still lists the original 33 transfer failures. Those were all resolved out of
+> band (retry + macOS sync) and confirmed by the `--full` census above, which is
+> authoritative. The FAIL is a stale-log artifact, not a real gap. Step 3
+> (bucket classification) `SKIP`s because `drop_classification.tsv` — an audit
+> artifact, not a runtime input — isn't present on the EC2; the drop logic is
+> enforced by `drop_list.txt` at migration time and confirmed by the exact
+> 158,173 item count (no drops leaked).
+
+What happened along the way:
+
+| Apparent problem | Actual status |
+|---|---|
+| 47 run-1 failures (run 1 was killed near its failure threshold; `failed.tsv` is overwritten each run so they survived only in `sync_assets_progress.log`) | All present — run 2 re-synced them |
+| 91,024 "missing" (0 files transferred) | Benign — already synced in run 1; 2,045-item sample 100% present |
+| 33 run-2 failures | Recoverable (below) |
+| 85 "coverage gaps" from an early `--full` | False — a parser bug on space-containing S3 keys |
+
+The 33 run-2 failures were Windows `aws` CLI crashes (`0xC0000005`,
+`0xC0000409`) under 32-way concurrency, not S3 errors. 31 recovered via
+`sync_assets.py --failed-tsv sync_assets_failed.tsv --workers 4`. The remaining
+2 (`Duck_River_2`, `St._Johns_Creek`) had spaces in their source filenames,
+which crash the Windows CLI even at low concurrency — synced from a macOS shell
+instead, byte-verified.
+
+**Two gotchas worth remembering:**
+
+1. **`sync_assets.py` TSV outputs are not a reliable completeness record.**
+   `failed.tsv` is overwritten each run; `missing.tsv` ("0 files transferred")
+   conflates empty-source with already-synced. Always confirm against the
+   destination with `verify_asset_coverage.py --full`.
+2. **Spaces in HEC-RAS S3 keys bite twice** — they crash the Windows `aws` CLI,
+   and break naive `aws s3 ls` parsing (`split()[-1]` grabs only the last token
+   of a spacey key; parse with `split(maxsplit=3)`). For spacey items that won't
+   sync on Windows, run the sync from macOS/Linux.
+
+**Verification & retry tooling** (added during this migration):
+- `sync_assets.py --failed-tsv <tsv> [--workers 4]` — retry only the items in a
+  failed/missing/triaged TSV. Outputs go to `*_retry.tsv`; progress log appends
+  a `RETRY RUN` banner.
+- `verify_asset_coverage.py` — destination-truth verification: `--full` (census),
+  default (targeted reconcile of blind-spot suspects), `--triage-gaps` (classify
+  gaps as source-empty vs real).
+
+**Raw audit trail** (run logs and TSVs — not committed; large, run-specific):
+`s3://fimc-data/dewberry-stac/_hec-ras-migration-audit/`. Holds the full run
+logs (`migrate_full.log`, `sync_assets_progress.log`, `sync_assets_rerun.log`,
+`verify_subset.log`, `verify_migration.log`), the failed/missing/gaps TSVs, and
+`reconcile_results.tsv`. The `.tsv` classification inputs
+(`collection_overrides.tsv`, `id_rewrites.tsv`) are also there as a convenience
+duplicate; they (and `drop_list.txt`) are committed in this repo as the source
+of record.
 
 ## Phase 3 — Load into pgSTAC
 
