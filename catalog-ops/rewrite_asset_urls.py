@@ -25,13 +25,17 @@ Usage:
     # Apply
     sudo -E python3 rewrite_asset_urls.py --proxy-url http://$HOST_IP:8083
 
-    # Scope to a collection prefix
+    # Batch mode + skip thumbnails (recommended — avoids lock errors and proxy load from thumbnails)
+    sudo -E python3 rewrite_asset_urls.py --proxy-url http://$HOST_IP:8083 --batch --skip-thumbnails
+
+    # Scope to a single collection prefix
     sudo -E python3 rewrite_asset_urls.py --proxy-url http://$HOST_IP:8083 --collection-prefix mip
 """
 
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -39,9 +43,10 @@ import psycopg2
 
 
 DB_PASSWORD_FILE = "/opt/hec-ras-stac/.db_password"
+BATCH_PREFIXES = ["ble_", "mip_", "ohio_rfc"]
 
 
-def _build_sql(proxy_base: str, collection_prefix: Optional[str]) -> tuple[str, str, list]:
+def _build_sql(proxy_base: str, collection_prefix: Optional[str], skip_thumbnails: bool = False) -> tuple[str, str, list]:
     proxy = proxy_base.rstrip("/")
 
     params: list = []
@@ -49,6 +54,8 @@ def _build_sql(proxy_base: str, collection_prefix: Optional[str]) -> tuple[str, 
     if collection_prefix:
         collection_filter = "AND collection LIKE %s"
         params.append(f"{collection_prefix}%")
+
+    thumbnail_filter = "AND key != 'thumbnail'" if skip_thumbnails else ""
 
     update_sql = f"""
         UPDATE pgstac.items
@@ -59,7 +66,7 @@ def _build_sql(proxy_base: str, collection_prefix: Optional[str]) -> tuple[str, 
                 SELECT jsonb_object_agg(
                     key,
                     CASE
-                        WHEN value->>'href' LIKE 's3://%%'
+                        WHEN value->>'href' LIKE 's3://%%' {thumbnail_filter}
                         THEN jsonb_set(value, '{{href}}', to_jsonb(
                             '{proxy}/s3/' || substring(value->>'href' FROM length('s3://') + 1)
                         ))
@@ -105,6 +112,10 @@ def main() -> int:
     parser.add_argument("--db-password",       default=None,  help=f"Or set PGPASSWORD, or place in {DB_PASSWORD_FILE}")
     parser.add_argument("--db-name",           default="stacdb")
     parser.add_argument("--dry-run",           action="store_true")
+    parser.add_argument("--skip-thumbnails",   action="store_true",
+                        help="Leave thumbnail asset HREFs as s3:// (avoids proxying thumbnails, improves browser load time)")
+    parser.add_argument("--batch",             action="store_true",
+                        help=f"Process collections in separate transactions by prefix {BATCH_PREFIXES} to avoid lock exhaustion")
     args = parser.parse_args()
 
     password = _resolve_password(args)
@@ -132,42 +143,56 @@ def main() -> int:
         print(f"ERROR connecting: {e}")
         return 1
 
-    update_sql, count_sql, params = _build_sql(args.proxy_url, args.collection_prefix)
+    prefixes = BATCH_PREFIXES if args.batch else [args.collection_prefix]
 
-    cur = conn.cursor()
-    cur.execute(count_sql, params)
-    affected = cur.fetchone()[0]
-    cur.close()
-    print(f"Items needing rewrite: {affected}")
+    total_affected = 0
+    total_updated = 0
 
-    if affected == 0:
+    for prefix in prefixes:
+        update_sql, count_sql, params = _build_sql(args.proxy_url, prefix, args.skip_thumbnails)
+
+        cur = conn.cursor()
+        cur.execute(count_sql, params)
+        affected = cur.fetchone()[0]
+        cur.close()
+
+        label = f"{prefix}*" if prefix else "all collections"
+        print(f"[{label}] Items needing rewrite: {affected}")
+        total_affected += affected
+
+        if affected == 0 or args.dry_run:
+            continue
+
+        try:
+            cur = conn.cursor()
+            print(f"[{label}] Rewriting... ", end="", flush=True)
+            t0 = time.time()
+            cur.execute(update_sql, params)
+            rows_updated = cur.rowcount
+            conn.commit()
+            cur.close()
+            print(f"done ({time.time() - t0:.1f}s) — {rows_updated} updated")
+            total_updated += rows_updated
+        except Exception as e:
+            conn.rollback()
+            print(f"ERROR: {e}")
+            conn.close()
+            return 1
+
+    conn.close()
+
+    if total_affected == 0:
         print("Nothing to do.")
-        conn.close()
         return 0
 
     if args.dry_run:
-        print("\n[DRY RUN] No changes written to database")
-        conn.close()
+        print(f"\n[DRY RUN] No changes written to database ({total_affected} items would be rewritten)")
         return 0
-
-    try:
-        cur = conn.cursor()
-        cur.execute(update_sql, params)
-        rows_updated = cur.rowcount
-        conn.commit()
-        cur.close()
-    except Exception as e:
-        conn.rollback()
-        print(f"ERROR: {e}")
-        conn.close()
-        return 1
-
-    conn.close()
 
     print("=" * 70)
     print("SUMMARY")
     print("=" * 70)
-    print(f"Items updated: {rows_updated}")
+    print(f"Items updated: {total_updated}")
 
     return 0
 

@@ -70,7 +70,7 @@ no "has no collection field" warnings.
 Run in `tmux` or `screen` — the full 158k load takes ~1 hour.
 
 ```bash
-python3 /opt/hec-ras-stac/repo/catalog-ops/load_catalog.py \
+sudo python3 /opt/hec-ras-stac/repo/catalog-ops/load_catalog.py \
   ~/hec-ras-catalog --db-host localhost
 ```
 
@@ -98,7 +98,7 @@ curl -s http://localhost:8082/collections | jq '.collections | length'
 **Rollback:** Reset DB and re-load:
 ```bash
 cd /opt/hec-ras-stac/deployment
-bash /opt/hec-ras-stac/repo/catalog-ops/reset_database.sh --force
+sudo bash /opt/hec-ras-stac/repo/catalog-ops/reset_database.sh --force
 # Then repeat Phase 2.
 ```
 
@@ -177,7 +177,7 @@ To redo catalog loading from a clean state, reset the database and repeat from
 Phase 2:
 ```bash
 cd /opt/hec-ras-stac/deployment
-bash /opt/hec-ras-stac/repo/catalog-ops/reset_database.sh --force
+sudo bash /opt/hec-ras-stac/repo/catalog-ops/reset_database.sh --force
 ```
 
 The source S3 catalog and asset data are read-only — no step here writes to S3,
@@ -247,7 +247,7 @@ The script calls `docker-compose` without `-f` and expects to run from the
 compose file's directory. Always run it from `/opt/hec-ras-stac/deployment/`:
 ```bash
 cd /opt/hec-ras-stac/deployment
-bash /path/to/reset_database.sh --force
+sudo bash /path/to/reset_database.sh --force
 ```
 
 ---

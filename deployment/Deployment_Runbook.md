@@ -244,8 +244,8 @@ sudo git clone https://github.com/NGWPC/hec-ras-stac.git /opt/hec-ras-stac/repo 
 Verify:
 ```bash
 ls /opt/hec-ras-stac/repo/catalog-ops/
-# Expected: load_catalog.py, rewrite_asset_urls.py, rewrite_catalog_hrefs.py,
-#           reset_database.sh, diagnose_assets.sh, test_asset_proxy.sh, etc
+# Expected: Catalog_Operations.md, diagnose_assets.sh, fix_thumbnail_assets.py,     
+#           load_catalog.py, reset_database.sh, rewrite_asset_urls.py ...  
 ```
 
 ---

@@ -36,7 +36,7 @@ echo "[$(date)] Starting database reset..."
 echo ""
 
 echo "[$(date)] Step 1: Stopping services..."
-docker-compose down
+docker-compose -f /opt/hec-ras-stac/deployment/docker-compose.yml down
 echo "[$(date)] Services stopped"
 echo ""
 
@@ -46,10 +46,12 @@ if docker volume ls | grep -q "pgstac-data"; then
     echo "[$(date)] Removing named volume: pgstac-data"
     docker volume rm pgstac-data 2>/dev/null || true
 else
-    PGDATA_DIR="$(dirname "${BASH_SOURCE[0]}")/pgdata"
+    PGDATA_DIR="/opt/hec-ras-stac/deployment/pgdata"
     if [ -d "$PGDATA_DIR" ]; then
         echo "[$(date)] Removing bind mount data: $PGDATA_DIR"
         rm -rf "$PGDATA_DIR"
+    else
+        echo "[$(date)] WARNING: pgdata not found at $PGDATA_DIR — data may not have been cleared"
     fi
 fi
 
@@ -57,7 +59,7 @@ echo "[$(date)] Database data removed"
 echo ""
 
 echo "[$(date)] Step 3: Starting services with fresh database..."
-docker-compose up -d
+docker-compose -f /opt/hec-ras-stac/deployment/docker-compose.yml up -d
 echo ""
 
 echo "[$(date)] Step 4: Waiting for database initialization..."
@@ -94,7 +96,24 @@ else
 fi
 echo ""
 
-echo "[$(date)] Step 6: Database statistics (should be empty)..."
+echo "[$(date)] Step 6: Setting max_locks_per_transaction..."
+docker exec "$DB_CONTAINER" psql -U pgstac -d stacdb -c "ALTER SYSTEM SET max_locks_per_transaction = 256;"
+docker restart "$DB_CONTAINER"
+echo "[$(date)] Waiting for database to restart..."
+sleep 10
+MAX_WAIT=60
+WAIT_COUNT=0
+while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    if docker exec "$DB_CONTAINER" pg_isready -U pgstac -d stacdb >/dev/null 2>&1; then
+        echo "[$(date)] Database is ready"
+        break
+    fi
+    sleep 2
+    WAIT_COUNT=$((WAIT_COUNT + 2))
+done
+echo ""
+
+echo "[$(date)] Step 7: Database statistics (should be empty)..."
 docker exec "$DB_CONTAINER" psql -U pgstac -d stacdb -c "SELECT COUNT(*) as collection_count FROM pgstac.collections;" 2>/dev/null || echo "No collections table yet"
 docker exec "$DB_CONTAINER" psql -U pgstac -d stacdb -c "SELECT COUNT(*) as item_count FROM pgstac.items;" 2>/dev/null || echo "No items table yet"
 
@@ -106,12 +125,10 @@ echo ""
 echo "The database is now empty and ready to load a new catalog."
 echo ""
 echo "Next steps:"
-echo "  1. Upload STAC JSONs to S3 (durable store):"
-echo "     aws s3 sync ~/ras-stac-migration-v2/dest/ s3://hv-fim-dev-stac/hec-ras-stac/ --profile <dest-profile>"
+echo "  1. Load into pgSTAC:"
+echo "     python3 /opt/hec-ras-stac/repo/catalog-ops/load_catalog.py ~/hec-ras-catalog --db-host localhost"
 echo ""
-echo "  2. Load into pgSTAC:"
-echo "     python3 load_catalog.py ~/ras-stac-migration-v2/dest --db-host localhost"
-echo ""
-echo "  3. Rewrite asset HREFs for browser access:"
-echo "     python3 rewrite_asset_urls.py --proxy-url http://\$(hostname -I | awk '{print \$1}'):8083"
+echo "  2. Rewrite asset HREFs for browser access:"
+echo "     sudo -E python3 /opt/hec-ras-stac/repo/catalog-ops/rewrite_asset_urls.py \\"
+echo "       --proxy-url http://\$(hostname -I | awk '{print \$1}'):8083 --db-host localhost --batch"
 echo ""
