@@ -235,7 +235,7 @@ docker ps  # Expect: hec-ras-stac-db, hec-ras-stac-api, hec-ras-stac-browser, he
 
 **State after Phase 2:** 4 containers running, empty database, API on 8082, Browser on 8080, proxy on 8083.
 
-### 2.4 Clone Repository
+### 2.4 Clone Repository (**EC2 instance**)
 
 ```bash
 sudo git clone https://github.com/NGWPC/hec-ras-stac.git /opt/hec-ras-stac/repo -b catalog-ops
@@ -261,7 +261,7 @@ sed -i 's|^S3_CATALOG_PATH=.*|S3_CATALOG_PATH=hec-ras-stac/|' /opt/hec-ras-stac/
 sudo /opt/hec-ras-stac/deployment/restart-services.sh
 ```
 
-**Next:** proceed to `catalog-ops/Catalog_Operations.md` to sync the catalog locally, load it into pgSTAC, rewrite asset URLs, and verify the deployment end-to-end.
+**Next:** proceed to `catalog-ops/Catalog_Operations.md` to sync the catalog locally, load it into pgSTAC, rewrite asset URLs, and verify the deployment end-to-end. After completing all catalog ops phases, use the **Production Readiness Sign-Off** in `catalog-ops/Catalog_Operations.md` Phase 8 to confirm the full deployment.
 
 ---
 
