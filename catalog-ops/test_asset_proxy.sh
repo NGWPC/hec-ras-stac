@@ -78,10 +78,10 @@ echo "-------------------------------"
 
 if [ -n "${PGPASSWORD:-}" ]; then
     : # already set
-elif [ -f /opt/ras-stac/.db_password ]; then
-    PGPASSWORD=$(cat /opt/ras-stac/.db_password)
+elif [ -f /opt/hec-ras-stac/.db_password ]; then
+    PGPASSWORD=$(sudo cat /opt/hec-ras-stac/.db_password)
 else
-    echo "WARNING: PGPASSWORD not set and /opt/ras-stac/.db_password not found"
+    echo "WARNING: PGPASSWORD not set and /opt/hec-ras-stac/.db_password not found"
     echo "Skipping database asset test"
     exit 0
 fi

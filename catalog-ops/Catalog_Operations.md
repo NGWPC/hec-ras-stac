@@ -240,7 +240,14 @@ If the plugin fails with a pydantic `BaseSettings` error, see [QGIS STAC plugin 
 /opt/hec-ras-stac/deployment/backup-db.sh
 ```
 
-Automated weekly backups are configured (Sunday 2 AM) by the bootstrap.
+Automated weekly backups are configured (Sunday 2 AM) by the bootstrap. If the database is static after the initial load, you can disable the weekly schedule while keeping the script available for manual runs:
+
+```bash
+crontab -l | grep -v backup-db.sh | crontab -
+
+# Verify removed
+crontab -l
+```
 
 ---
 

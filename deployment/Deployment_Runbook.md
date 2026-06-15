@@ -87,7 +87,7 @@ The `rewrite_catalog_hrefs.py` script is needed in step 1.2 — clone the repo
 locally before proceeding.
 
 ```bash
-git clone https://github.com/NGWPC/hec-ras-stac.git ~/hec-ras-stac -b catalog-ops
+git clone https://github.com/NGWPC/hec-ras-stac.git ~/hec-ras-stac
 ```
 
 ### 1.2 Sync the STAC catalog to local disk
@@ -238,7 +238,7 @@ docker ps  # Expect: hec-ras-stac-db, hec-ras-stac-api, hec-ras-stac-browser, he
 ### 2.4 Clone Repository (**EC2 instance**)
 
 ```bash
-sudo git clone https://github.com/NGWPC/hec-ras-stac.git /opt/hec-ras-stac/repo -b catalog-ops
+sudo git clone https://github.com/NGWPC/hec-ras-stac.git /opt/hec-ras-stac/repo
 ```
 
 Verify:
