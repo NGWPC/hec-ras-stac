@@ -97,9 +97,10 @@ def parse_s3_root(uri: str) -> tuple[str, str]:
 
 def _parse_source_href(href: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Parse a source HREF into (prefix, hash, rel_path). Section (source_models/stac_items) is dropped."""
-    if "fim.s3.amazonaws.com" in href:
-        href = href.replace("https://fim.s3.amazonaws.com//", "s3://fim/")
-        href = href.replace("https://fim.s3.amazonaws.com/", "s3://fim/")
+    parsed = urlparse(href)
+    if parsed.scheme == "https" and parsed.hostname == "fim.s3.amazonaws.com":
+        key = parsed.path.lstrip("/")
+        href = f"s3://fim/{key}"
     if not href.startswith("s3://fim/"):
         return None, None, None
     key = urlparse(href).path.lstrip("/")
