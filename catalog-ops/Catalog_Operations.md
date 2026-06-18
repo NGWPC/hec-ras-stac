@@ -118,6 +118,37 @@ Item JSONs in pgSTAC have `s3://` HREFs. The asset proxy streams S3 content
 using the EC2 IAM role — browsers can't use IAM credentials directly. This step
 rewrites every asset HREF to a proxy URL in a single SQL UPDATE.
 
+### 3.0 Prerequisite: max_locks_per_transaction
+
+The rewrite triggers pgSTAC partition updates that require more locks than
+PostgreSQL's default allows. If this setting isn't applied you will see:
+
+```
+ERROR: out of shared memory
+HINT: You might need to increase max_locks_per_transaction.
+CONTEXT: SQL statement "REFRESH MATERIALIZED VIEW partitions"
+```
+
+Verify and apply before running the rewrite:
+
+```bash
+# Check current value (should be 256)
+docker exec hec-ras-stac-db psql -U pgstac -d stacdb -c \
+  "SHOW max_locks_per_transaction;"
+
+# If not 256, apply and restart
+docker exec hec-ras-stac-db psql -U pgstac -d stacdb -c \
+  "ALTER SYSTEM SET max_locks_per_transaction = 256;"
+docker restart hec-ras-stac-db
+
+# Wait for DB to come back
+until docker exec hec-ras-stac-db pg_isready -U pgstac -d stacdb >/dev/null 2>&1; do sleep 2; done
+echo "DB ready"
+```
+
+This is applied automatically by `reset_database.sh`, but must be set manually
+if the DB was not reset before loading.
+
 ### 3.1 Dry Run
 ```bash
 export HOST_IP=$(hostname -I | awk '{print $1}')
@@ -132,12 +163,16 @@ Expected: `Items needing rewrite: <N>` followed by `[DRY RUN]`.
 
 ### 3.2 Apply
 ```bash
+export HOST_IP=$(hostname -I | awk '{print $1}') 
 sudo -E python3 /opt/hec-ras-stac/repo/catalog-ops/rewrite_asset_urls.py \
   --proxy-url http://${HOST_IP}:8083 \
-  --db-host localhost
+  --db-host localhost --batch
 ```
 
-Expected: `Items updated: <N>`. Completes in seconds. Idempotent — re-running
+`--batch` processes each collection prefix (`ble_*`, `mip_*`, `ohio_rfc`) in a
+separate transaction to avoid lock exhaustion on large catalogs.
+
+Expected: `Items updated: <N>` per prefix. Idempotent — re-running
 when nothing needs rewriting prints `Nothing to do.`
 
 ### 3.3 Verify
