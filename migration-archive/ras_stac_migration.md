@@ -133,11 +133,11 @@ the durable S3 copy carries the source links for provenance.
 
 The codebase splits into two top-level subtrees:
 
-- **`migration/`** — one-shot migration pipeline.
-- **`runtime/`** — durable EC2-side operational tooling (sits alongside
+- **`migration-archive/`** — one-shot migration pipeline (completed).
+- **`catalog-ops/`** — durable EC2-side operational tooling (sits alongside
   `deployment/`).
 
-### Migration pipeline (`migration/`)
+### Migration pipeline (`migration-archive/`)
 
 | Script | Role |
 |---|---|
@@ -152,14 +152,13 @@ The codebase splits into two top-level subtrees:
 | `verify_migration.py` | Verification harness for full-scale runs. Checks STAC bucket counts, link-chain, per-bucket classification spot-checks (survivors present, drops absent), sampled asset HREF resolution, and asset sync log summary. |
 | `dump-reconciliation/` | Drop-list pre-flight: reconciles the local S3 export against Dewberry's pgstac dump (the source of truth) and emits the list of local items to skip during migration. |
 
-### EC2-side operational tooling (`runtime/`)
+### EC2-side operational tooling (`catalog-ops/`)
 
 | Script | Role |
 |---|---|
 | `load_catalog.py` | Load `catalog.json` + collections + items into pgSTAC. Auto-detects two input layouts: working-dir (post-`migrate.py`) or flat-destination (post-`aws s3 sync` from S3). |
 | `rewrite_asset_urls.py` | Post-load: rewrite `s3://` HREFs in pgSTAC to asset-proxy URLs (so STAC Browser renders assets). Leaves `s3_key` untouched (ripple1d reads it directly). |
 | `reset_database.sh`, `test_asset_proxy.sh`, `diagnose_assets.sh` | EC2 utilities (DB reset, proxy smoke test, diagnostics). |
-| `requirements.txt` | `psycopg2-binary` — only needed by `load_catalog.py` and `rewrite_asset_urls.py`. |
 
 ---
 
@@ -304,67 +303,10 @@ logs (`migrate_full.log`, `sync_assets_progress.log`, `sync_assets_rerun.log`,
 duplicate; they (and `drop_list.txt`) are committed in this repo as the source
 of record.
 
-## Phase 3 — Load into pgSTAC
+## Phases 3–5 — EC2 Load, Asset URL Rewriting, Downstream
 
-On the EC2, get the catalog onto the instance:
-
-**Pull directly from S3** (recommended — no working-dir transfer):
-```bash
-mkdir -p ~/load_full
-aws s3 sync s3://<stac-bucket>/hec-ras-stac/ ~/load_full/
-python3 /path/to/runtime/load_catalog.py ~/load_full --db-host localhost --dry-run
-python3 /path/to/runtime/load_catalog.py ~/load_full --db-host localhost
-```
-
-`load_catalog.py` auto-detects which layout it's looking at. It upserts every
-collection, then walks the items, groups by each item's `collection` field,
-and batch-upserts per group. The DB password is read from `--db-password`,
-`PGPASSWORD`, or `/opt/hec-ras-stac/.db_password`.
-
-Verify:
-```bash
-docker exec -i hec-ras-stac-db psql -U pgstac -d stacdb -c \
-  "SELECT collection, COUNT(*) FROM pgstac.items GROUP BY collection ORDER BY collection;"
-curl http://<stac-host>:8082/collections | jq '.collections | length'
-curl "http://<stac-host>:8082/collections/<a-collection-id>/items?limit=1" | jq '.features[0].id'
-```
-
-**Rollback:** `runtime/reset_database.sh --force` (EC2), then re-run
-`runtime/load_catalog.py`.
-
-## Phase 4 — Asset URL Rewriting (for STAC browser)
-
-Run only if STAC Browser needs to render thumbnails / stream assets. This
-rewrites the `s3://` asset HREFs **in pgSTAC** to route through the
-asset-proxy (port 8083). The `s3_key` field is intentionally left untouched
-because `ripple1d-pipeline` reads `s3_key` directly via boto3 for the real
-key.
-
-> **Before full-catalog use:** `rewrite_asset_urls.py:_get_items()` does
-> `fetchall()` on the whole `pgstac.items` table — ~1-2 GB in memory at
-> 178k items. Switch to a server-side cursor before running unscoped at
-> full scale. Always-safe path: pass `--collection-prefix`.
-
-```bash
-export HOST_IP=$(hostname -I | awk '{print $1}')
-export PGPASSWORD=$(sudo cat /opt/hec-ras-stac/.db_password)
-python3 /path/to/runtime/rewrite_asset_urls.py --proxy-url http://${HOST_IP}:8083 --db-host localhost --dry-run
-python3 /path/to/runtime/rewrite_asset_urls.py --proxy-url http://${HOST_IP}:8083 --db-host localhost
-```
-
-Smoke test: `runtime/test_asset_proxy.sh http://localhost:8083`. Diagnostics:
-`runtime/diagnose_assets.sh`.
-
-## Phase 5 — Downstream
-
-`ripple1d-pipeline` connects via `RP_STAC_URL`. Update its `.env`:
-```
-RP_STAC_URL=http://<stac-host>:8082
-```
-
-No ripple1d code changes — the pipeline queries by collection ID
-(unchanged) and reads `asset.s3_key` for the `ras-geometry-gpkg` role,
-which now points at the target data bucket transparently.
+These steps (pgSTAC load, asset-proxy URL rewriting, ripple1d wiring) are
+covered by **[`../catalog-ops/Catalog_Operations.md`](../catalog-ops/Catalog_Operations.md)**.
 
 ---
 

@@ -13,7 +13,7 @@ CONTAINER="${CONTAINER:-dewberry-pgstac-probe}"
 IMAGE="${IMAGE:-ghcr.io/stac-utils/pgstac:v0.7.10}"
 PORT="${PORT:-5433}"
 # Default dump path resolves relative to this script: ../../20260518_183642.dump
-# (script lives at migration/dump-reconciliation/, dump at repo root).
+# (script lives at migration-archive/dump-reconciliation/, dump at repo root).
 DEFAULT_DUMP="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/20260518_183642.dump"
 DUMP="${1:-$DEFAULT_DUMP}"
 

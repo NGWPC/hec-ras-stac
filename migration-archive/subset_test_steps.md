@@ -8,7 +8,7 @@ dump-reconciliation pre-flight: 8 items survive, 4 drop (2 hashes contain 2 item
 
 - `~/ras-stac-migration/` already synced from `s3://fimc-data/dewberry-stac/`
   via `sync_items.py --whole-tree` (the drop list was built against this)
-- `drop_list.txt` present in `migration/` (run
+- `drop_list.txt` present in `migration-archive/` (run
   `dump-reconciliation/build_drop_list.py` if missing — needs the local pgstac
   container from `dump-reconciliation/restore_dump.sh`; then run
   `dump-reconciliation/verify_coverage.py` to confirm exit 0)
@@ -104,8 +104,8 @@ sanity-check via STAC Browser:
 mkdir -p ~/load_subset
 aws s3 sync s3://fimc-data/hv-fim-dev-stac/hec-ras-stac/ ~/load_subset/
 
-python3 /path/to/runtime/load_catalog.py ~/load_subset --db-host localhost --dry-run
-python3 /path/to/runtime/load_catalog.py ~/load_subset --db-host localhost
+python3 /path/to/catalog-ops/load_catalog.py ~/load_subset --db-host localhost --dry-run
+python3 /path/to/catalog-ops/load_catalog.py ~/load_subset --db-host localhost
 
 # Verify pgSTAC
 docker exec hec-ras-stac-db psql -U pgstac -d stacdb -c \
@@ -115,7 +115,7 @@ docker exec hec-ras-stac-db psql -U pgstac -d stacdb -c \
 # Optional: rewrite asset HREFs for STAC Browser preview
 export HOST_IP=$(hostname -I | awk '{print $1}')
 export PGPASSWORD=$(sudo cat /opt/hec-ras-stac/.db_password)
-python3 /path/to/runtime/rewrite_asset_urls.py --proxy-url http://${HOST_IP}:8083 --db-host localhost
+python3 /path/to/catalog-ops/rewrite_asset_urls.py --proxy-url http://${HOST_IP}:8083 --db-host localhost
 ```
 
 Open `http://<ec2-host>:8080` in a browser — 6 collections navigable, each
