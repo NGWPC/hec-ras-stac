@@ -524,6 +524,8 @@ services:
       - "effective_io_concurrency=200"
       - "-c"
       - "max_connections=100"
+      - "-c"
+      - "max_locks_per_transaction=256"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
