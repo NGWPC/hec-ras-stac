@@ -1,0 +1,326 @@
+# HEC-RAS STAC Migration
+
+Migrates the Dewberry HEC-RAS STAC catalog into a target AWS account, backed
+by the same pgSTAC + stac-fastapi + STAC Browser + asset-proxy stack used for
+BenchmarkCat. The migration scripts are in this directory; the EC2 stack is
+stood up by the Terraform tree in `../deployment/terraform/`.
+
+For per-decision rationale (suffix scheme, deferred FEMA rename, etc.) see the
+analysis files in this directory. For the operator walkthrough with verification
+commands, see **`subset_test_steps.md`**.
+
+> **Status: asset migration complete and verified — 158,173 / 158,173 items
+> present on `s3://fimc-data/hv-fim-dev-data/hec-ras/`.** See
+> [Phase 2 — completion record](#phase-2--completion-record) for what was run,
+> the recovery of 33 transfer failures, and the two gotchas (unreliable sync
+> logs; spaces in S3 keys).
+
+## Overview
+
+| Component | Detail |
+|---|---|
+| Source | `s3://fimc-data/dewberry-stac/` (item HREFs use the legacy alias `s3://fim/`) |
+| Source prefixes | `ebfe`, `mip_30`, `mip_70` (storage prefixes, **not** collection IDs) |
+| Target STAC bucket | metadata JSONs only — `s3://<stac-bucket>/hec-ras-stac/` |
+| Target data bucket | all assets — `s3://<data-bucket>/hec-ras/` |
+| EC2 services | PostgreSQL/pgSTAC (5432), STAC API (8082), STAC Browser (8080), asset-proxy (8083) |
+| Catalog scale | ~178k items, 1,140 source collections |
+
+The catalog is migrated in two parts: **metadata** (catalog.json, collection
+JSONs, item JSONs) goes to the STAC bucket; **assets** (model files, gpkgs,
+thumbnails) go to the data bucket. Items are organized by their collection at
+the destination — the source's `<prefix>/<hash>/` shape is a provenance
+artifact and is dropped.
+
+Migration scope is determined by reconciliation against Dewberry's pgstac
+dump (the published source of truth). Local items in the S3 export that
+match an entry in the dump on `(id, collection, source_hash)` migrate;
+items not in the dump are dropped. 158,178 of the 178,826 local items
+survive the reconciliation. See `dump-reconciliation/README.md`
+for the full classification rules.
+
+Each local item is assigned to one of eight buckets:
+
+| Bucket | Decision | Description | Output file |
+|---|---|---|---|
+| **A** | MIGRATE | Exact match — `(id, collection, hash)` aligns with dump | `id_rewrites.tsv` (if dump applied `_N` suffix) |
+| **B1** | DROP | Same id, different collection, e_tags match — same physical model published elsewhere | `drop_list.txt` |
+| **B2a** | DROP | Local `mip_no_crs`, dump has it under a real collection with different files — dump's corrected version supersedes | `drop_list.txt` |
+| **B2b** | MIGRATE | Same id, different real collection, no e_tag overlap — independent models sharing a name (id unique within collection, no destination collision) | — |
+| **C** | DROP | Local catalogued, id absent from dump entirely | `drop_list.txt` |
+| **D** | MIGRATE | Local uncatalogued (`collection: null`), exact `(id, hash)` match in dump — migrates with collection override | `collection_overrides.tsv` |
+| **E** | DROP | Local uncatalogued, id in dump under a different hash — superseded version | `drop_list.txt` |
+| **F** | DROP | Local uncatalogued, id absent from dump entirely — genuine orphan | `drop_list.txt` |
+
+The destination catalog has no `hec_ras_uncatalogued` collection — every
+surviving item has a real `collection` value matching Dewberry's
+published catalog.
+
+## Target Layout
+
+Per-program parent Catalog above the Collections — `ble/`, `mip/`, `ohio_rfc/` — so the 1,140-collection tree is navigable.
+
+```
+s3://<stac-bucket>/
+└── hec-ras-stac/
+    ├── catalog.json
+    ├── ble/
+    │   ├── catalog.json
+    │   ├── <collection>/
+    │   │   ├── collection.json
+    │   │   └── <item-id>/<item-id>.json
+    │   └── ... (113 ble_* collections)
+    ├── mip/
+    │   ├── catalog.json
+    │   ├── <collection>/
+    │   │   ├── collection.json
+    │   │   └── <item-id>/<item-id>.json
+    │   └── ... (1,026 mip_* collections)
+    └── ohio_rfc/
+        ├── catalog.json
+        └── ohio_rfc/
+            ├── collection.json
+            └── <item-id>/<item-id>.json
+
+s3://<data-bucket>/hec-ras/
+└── <collection-id>/<item-id>/
+    ├── thumbnail.png                         (where present in source)
+    ├── <item-id>.gpkg                        (where present in source)
+    └── ... (model files flat; MODELING/ subdir preserved verbatim where present)
+```
+
+Classification rule: `ble_*` → `ble/`, `mip_*` → `mip/`, `ohio_rfc` → `ohio_rfc/`.
+program catalogs are kept as scaffolds so consumers know the slots exist.
+
+The data bucket stays flat — assets aren't browsed by humans, ripple1d reads
+`s3_key` directly via boto3, and a parent layer there would only add
+indirection. pgstac is unaffected by the catalog tree shape (it flattens to
+`(collection_id, item_id)` regardless).
+
+See `S3_organization.txt` for the full diagram including HREF rewrite rules.
+
+## HREF Transformation
+
+Item JSON asset HREFs are rewritten; everything else in the item is preserved
+as-is, except:
+
+- Provenance properties added on every item: `original_source_hash`,
+  `original_source_hash_dir`, `original_source_prefix`. Safe to drop
+  post-migration once the legacy Dewberry bucket is decommissioned.
+
+Items dropped by the `dump-reconciliation/` pre-flight (anything not in
+Dewberry's pgstac dump) are skipped during the per-item walk and never
+reach this rewrite step.
+
+| Source HREF (matched) | Destination HREF (written) |
+|---|---|
+| `s3://fim/<prefix>/source_models/<hash>/<file>` | `s3://<data-bucket>/hec-ras/<collection-id>/<item-id>/<file>` |
+| `s3://fim/<prefix>/stac_items/<hash>/<file>` | `s3://<data-bucket>/hec-ras/<collection-id>/<item-id>/<file>` |
+| `https://fim.s3.amazonaws.com//<prefix>/stac_items/<hash>/<file>` | `s3://<data-bucket>/hec-ras/<collection-id>/<item-id>/<file>` |
+
+Both source sections (`source_models/` and `stac_items/`) flatten into the
+same per-item destination directory. Verified across the full source: zero
+filename collisions between the two sections within any hash.
+
+Each rewritten asset also gets an `s3_key` field — the full bucket-relative
+key — so `ripple1d-pipeline` can read it directly via boto3.
+
+Item `links` arrays are **not** rewritten. stac-fastapi regenerates `self`,
+`collection`, `parent`, `root` links at serve time from the request host, so
+the durable S3 copy carries the source links for provenance.
+
+## Migration Scripts
+
+The codebase splits into two top-level subtrees:
+
+- **`migration-archive/`** — one-shot migration pipeline (completed).
+- **`catalog-ops/`** — durable EC2-side operational tooling (sits alongside
+  `deployment/`).
+
+### Migration pipeline (`migration-archive/`)
+
+| Script | Role |
+|---|---|
+| `sync_items.py` | Pull item JSONs from Dewberry → local `items/<source_prefix>/<source_hash_dir>/<item-id>.json`. Three modes: per-hash (`--subset N`), whole-tree (full-scale), `--items-from FILE` (curated subset). |
+| `generate_collections.py` | Fetch collections from Dewberry API → local `collections/`. Default: filter to collections actually referenced by local items (after the drop-list pre-flight, this is what makes it to the destination). Pass `--all` to emit every API collection. |
+| `generate_catalog.py` | Write the top-level `catalog.json` plus one program-level `catalog.json` per `ble/`/`mip/`/`ohio_rfc/`. Root catalog links to program catalogs; program catalogs link to their Collections. |
+| `rewrite_hrefs.py` | Load drop list from `drop_list.txt` and skip matching items. For surviving items: rewrite asset HREFs, restructure items source → destination layout, attach `original_source_*` provenance. |
+| `upload_to_s3.py` | Per-collection walk; route each Collection upload into its program dir under `<stac-root>/hec-ras-stac/<program>/<collection>/...` per the classification rule. |
+| `sync_assets.py` | Per-item S3-to-S3 copy of source assets → data bucket (flat). Reads provenance props set by `rewrite_hrefs.py`. `--via-local` for cross-account staging. |
+| `migrate.py` | Orchestrator — runs the six phases above in order. Reads required env vars `DATA_ROOT`, `STAC_ROOT` (full S3 URIs — either `s3://<bucket>` or `s3://<bucket>/<prefix>`), `STAC_API_URL`, plus optional `WHOLE_TREE=1`, `SUBSET=N`, `ITEMS_FROM=<file>`, `DRY_RUN=1`, `VIA_LOCAL=1`. Auto-loads `../.env` and detects single-cred vs dual-cred mode. |
+| `verify_subset.py` | Verification harness for subset runs. Auto-promotes `DEST_AWS_*` → `AWS_*` in dual-cred mode. |
+| `verify_migration.py` | Verification harness for full-scale runs. Checks STAC bucket counts, link-chain, per-bucket classification spot-checks (survivors present, drops absent), sampled asset HREF resolution, and asset sync log summary. |
+| `dump-reconciliation/` | Drop-list pre-flight: reconciles the local S3 export against Dewberry's pgstac dump (the source of truth) and emits the list of local items to skip during migration. |
+
+### EC2-side operational tooling (`catalog-ops/`)
+
+| Script | Role |
+|---|---|
+| `load_catalog.py` | Load `catalog.json` + collections + items into pgSTAC. Auto-detects two input layouts: working-dir (post-`migrate.py`) or flat-destination (post-`aws s3 sync` from S3). |
+| `rewrite_asset_urls.py` | Post-load: rewrite `s3://` HREFs in pgSTAC to asset-proxy URLs (so STAC Browser renders assets). Leaves `s3_key` untouched (ripple1d reads it directly). |
+| `reset_database.sh`, `test_asset_proxy.sh`, `diagnose_assets.sh` | EC2 utilities (DB reset, proxy smoke test, diagnostics). |
+
+---
+
+## Phase 0 — Prerequisites
+
+- AWS access: read on `s3://fimc-data/dewberry-stac/*`; write on the target STAC and data buckets. 
+- Target buckets created.
+- For the EC2 phases: Terraform applied (`../deployment/terraform/`), the
+  four containers up, and `pip3 install psycopg2-binary` available on the
+  instance.
+
+**Gate:** confirm source read access before proceeding —
+`aws s3 ls s3://fimc-data/dewberry-stac/ | head`.
+
+## Phase 1 — Subset Validation (do this first)
+
+Run a small reproducible slice end-to-end before the full migration. The
+canonical subset is the 10-item curated list at `subset_items.txt` — it
+exercises key classification paths from the drop-list pre-flight
+(A / A-with-id-rewrite / B2a / C / D / E / F, including ohio_rfc program catalog).
+6 items land at the destination after the drop list filters out superseded / orphan items.
+
+Full procedure with verification steps after each phase:
+**`subset_test_steps.md`**.
+
+In short:
+```bash
+export DATA_ROOT=s3://<bucket>/<prefix-or-none>
+export STAC_ROOT=s3://<bucket>/<prefix-or-none>
+export STAC_API_URL=http://<stac-host>:8082
+export ITEMS_FROM=subset_items.txt
+python migrate.py # add VIA_LOCAL=1 if dual-cred
+python verify_subset.py 2>&1 | tee verify_subset.log
+```
+
+`verify_subset.py` runs the full verification sweep: S3 destination listings,
+per-item asset checks, and the HREF resolution loop. Expected end of log:
+```
+Items checked:      8
+Asset HREFs hit:    70
+Asset HREFs MISSED: 0
+```
+
+**Gate:** subset HREF resolution shows 0 misses before the full migration.
+
+## Phase 2 — Full Migration to Target S3
+
+Same flow, no subset, single-cred mode, direct S3-to-S3:
+```bash
+rm -rf ~/ras-stac-migration                    # clean slate
+unset SUBSET ITEMS_FROM VIA_LOCAL
+export DATA_ROOT=s3://<data-bucket>
+export STAC_ROOT=s3://<stac-bucket>
+export STAC_API_URL=http://<stac-host>:8082
+python migrate.py
+```
+
+Notes:
+- The asset sync (Phase 6 of `migrate.py`) is the long pole — hours at full
+  scale. Run in `tmux` / `screen` (Linux) or keep the RDP session alive
+  (Windows — use a mouse-jiggler script to prevent idle disconnect).
+- All `aws s3 cp` / `aws s3 sync` operations are idempotent — safe to re-run on partial failure.
+
+Verify against S3:
+```bash
+aws s3 cp s3://<stac-bucket>/hec-ras-stac/catalog.json - | jq '.id'        # "hec-ras-stac"
+aws s3 ls s3://<stac-bucket>/hec-ras-stac/ | head                          # program dirs + catalog.json
+aws s3 ls s3://<stac-bucket>/hec-ras-stac/mip/ | head                      # mip_* collections
+aws s3 ls s3://<data-bucket>/hec-ras/ --recursive | wc -l                  # large
+```
+
+### Phase 2 — Completion Record
+
+The asset sync ran on a Windows EC2 and took two runs plus targeted retries to
+land cleanly. Final state, confirmed by querying the destination bucket
+directly (not by trusting the sync logs):
+
+```
+$ python verify_asset_coverage.py --data-root s3://fimc-data/hv-fim-dev-data --full
+  expected items: 158173
+  item folders with >=1 object on dest: 158173
+Coverage: 158173/158173 present, 0 gaps
+FULL COVERAGE — every expected item has assets on the destination.
+```
+
+`verify_migration.py` independently confirms the STAC (metadata) side:
+link-chain PASS (3 programs, 1,139 collections, 158,173 items — every
+root→program→collection→item link intact), and sampled asset HREFs resolve
+0 misses. Both buckets reconcile at 158,173 items.
+
+> **Expected non-failure in `verify_migration.py`:** step 5 (asset-log summary)
+> reports `FAIL asset_logs` because it reads `sync_assets_failed.tsv`, which
+> still lists the original 33 transfer failures. Those were all resolved out of
+> band (retry + macOS sync) and confirmed by the `--full` census above, which is
+> authoritative. The FAIL is a stale-log artifact, not a real gap. Step 3
+> (bucket classification) `SKIP`s because `drop_classification.tsv` — an audit
+> artifact, not a runtime input — isn't present on the EC2; the drop logic is
+> enforced by `drop_list.txt` at migration time and confirmed by the exact
+> 158,173 item count (no drops leaked).
+
+What happened along the way:
+
+| Apparent problem | Actual status |
+|---|---|
+| 47 run-1 failures (run 1 was killed near its failure threshold; `failed.tsv` is overwritten each run so they survived only in `sync_assets_progress.log`) | All present — run 2 re-synced them |
+| 91,024 "missing" (0 files transferred) | Benign — already synced in run 1; 2,045-item sample 100% present |
+| 33 run-2 failures | Recoverable (below) |
+| 85 "coverage gaps" from an early `--full` | False — a parser bug on space-containing S3 keys |
+
+The 33 run-2 failures were Windows `aws` CLI crashes (`0xC0000005`,
+`0xC0000409`) under 32-way concurrency, not S3 errors. 31 recovered via
+`sync_assets.py --failed-tsv sync_assets_failed.tsv --workers 4`. The remaining
+2 (`Duck_River_2`, `St._Johns_Creek`) had spaces in their source filenames,
+which crash the Windows CLI even at low concurrency — synced from a macOS shell
+instead, byte-verified.
+
+**Two gotchas worth remembering:**
+
+1. **`sync_assets.py` TSV outputs are not a reliable completeness record.**
+   `failed.tsv` is overwritten each run; `missing.tsv` ("0 files transferred")
+   conflates empty-source with already-synced. Always confirm against the
+   destination with `verify_asset_coverage.py --full`.
+2. **Spaces in HEC-RAS S3 keys bite twice** — they crash the Windows `aws` CLI,
+   and break naive `aws s3 ls` parsing (`split()[-1]` grabs only the last token
+   of a spacey key; parse with `split(maxsplit=3)`). For spacey items that won't
+   sync on Windows, run the sync from macOS/Linux.
+
+**Verification & retry tooling** (added during this migration):
+- `sync_assets.py --failed-tsv <tsv> [--workers 4]` — retry only the items in a
+  failed/missing/triaged TSV. Outputs go to `*_retry.tsv`; progress log appends
+  a `RETRY RUN` banner.
+- `verify_asset_coverage.py` — destination-truth verification: `--full` (census),
+  default (targeted reconcile of blind-spot suspects), `--triage-gaps` (classify
+  gaps as source-empty vs real).
+
+**Raw audit trail** (run logs and TSVs — not committed; large, run-specific):
+`s3://fimc-data/dewberry-stac/_hec-ras-migration-audit/`. Holds the full run
+logs (`migrate_full.log`, `sync_assets_progress.log`, `sync_assets_rerun.log`,
+`verify_subset.log`, `verify_migration.log`), the failed/missing/gaps TSVs, and
+`reconcile_results.tsv`. The `.tsv` classification inputs
+(`collection_overrides.tsv`, `id_rewrites.tsv`) are also there as a convenience
+duplicate; they (and `drop_list.txt`) are committed in this repo as the source
+of record.
+
+## Phases 3–5 — EC2 Load, Asset URL Rewriting, Downstream
+
+These steps (pgSTAC load, asset-proxy URL rewriting, ripple1d wiring) are
+covered by **[`../catalog-ops/Catalog_Operations.md`](../catalog-ops/Catalog_Operations.md)**.
+
+---
+
+## Downstream Compatibility Notes
+
+`ripple1d-pipeline` (`src/setup/stac_importer.py`):
+
+1. `client.get_collection(collection_id)` — collection IDs unchanged → no impact
+2. `collection.get_items()` — item IDs mirror Dewberry's published view (pg dump).
+   454 items receive a `_N` numeric suffix via `id_rewrites.tsv` (within-collection
+   deduplication applied by Dewberry's dump); all other IDs are unchanged.
+3. Reads `asset.s3_key` for role `ras-geometry-gpkg` — rewritten to the
+   target data bucket → transparent.
+4. `bucket, key = href.replace("s3://", "").split("/", 1)` — works with the
+   new bucket name.
+
+Only change required downstream: `RP_STAC_URL` in `.env`.

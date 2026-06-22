@@ -1,0 +1,53 @@
+# Hand-curated subset for migration testing.
+#
+# Format: <source_prefix>/<source_hash_dir>   one per line, # for comments.
+# Source S3:  s3://fimc-data/dewberry-stac/<source_prefix>/{source_models,stac_items}/<source_hash_dir>/...
+#
+# Aligned with the dump-reconciliation drop-list approach: the subset
+# exercises both KEEP paths (bucket A) and DROP paths (bucket B2a/C/E/F)
+# so the drop-list integration in rewrite_hrefs.py gets tested end-to-end.
+#
+# Expected outcome after migration:
+#   10 items pulled by sync_items.py
+#   6 items land at destination (4× bucket A + 1× bucket A with id rewrite + 1× bucket D)
+#   4 items skipped via drop list (bucket B2a/C/E/F)
+#
+# Coverage of code paths:
+#   - ble_* + ebfe (hash-dir = pure hex)
+#   - mip_* + mip_30 (hash-dir = <fema>_<hex>)
+#   - mip_* + mip_70 (hash-dir = <fema>_<hex>)
+#   - mip_no_crs catalogued (still passes through, bucket A)
+#   - bucket A with _N suffix id rewrite (dump assigned SPRING_CREEK_1)
+#   - bucket D collection-override (ohio_rfc assigned via collection_overrides.tsv)
+#   - ohio program catalog emitted
+#   - drop-list skip (uncat superseded, uncat orphan, catalogued-but-absent-from-dump)
+
+# A1: bucket A — ble cataloged, ebfe source
+ebfe/6409e5e0f7d5eb96ef93cc08f061582f
+
+# A2: bucket A — mip cataloged, mip_30 source
+mip_30/19-06-0039S_ded4f9ba4b0deb4ec14e838328224400c3482256
+
+# A3: bucket A — mip cataloged, mip_70 source
+mip_70/11-04-7987S_1d81e7523c981a39761ea71b516a74f80698b40b
+
+# A4: bucket A — mip_no_crs catalogued, mip_30 source
+mip_30/16-06-3598S_2cecdf9a2df3d93ecbb81f4181154cfa59c66881
+
+# B2b: name-collision survivor — id exists in dump under different collection
+ebfe/07c3008d225eb9e6dbaad1059ddc5f1a
+
+# C: catalogued local, id absent from dump entirely (drop-list skip)
+ebfe/fcc87153951cf1158a3480f4a70b6dcd
+
+# E: uncat superseded — id in dump under different hash (drop-list skip)
+ebfe/d2dd00f0cc466fd41c0d74539367fe90
+
+# F: uncat genuine orphan — id absent from dump entirely (drop-list skip)
+ebfe/a205cda72dc69ecaefc23d4f46d2d680
+
+# B2a: local mip_no_crs, dump has corrected version (drop-list skip)
+mip_30/16-03-0904P_1f55037e4513da6757bd56c227ed6ef6af00589f
+
+# D: uncatalogued, collection_overrides.tsv assigns ohio_rfc — exercises ohio program catalog + bucket D override path
+mip_30/Ohio2018a_22Feb02_RASv600
