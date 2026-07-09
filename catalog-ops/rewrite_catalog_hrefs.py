@@ -7,10 +7,14 @@ references the NGWPC source path to use the OWP bucket path instead, producing
 an accurate static catalog that can be loaded into pgSTAC without any
 post-load DB patching.
 
-Only `href` fields are rewritten. The `s3_key` field is left untouched.
+Both `href` and `s3_key` are rewritten. `s3_key` is a bucket-relative key, so it
+is rebased onto the destination bucket alongside the href — it is set to whatever
+follows `s3://<dest-prefix>/` in the new href. Without this, direct boto3 access
+(`Bucket=hv-fim-dev-data, Key=<s3_key>`) would 404 on the OWP deployment.
 
 Default substitution:
-  s3://fimc-data/hv-fim-dev-data/... → s3://hv-fim-dev-data/...
+  href:   s3://fimc-data/hv-fim-dev-data/hec-ras/... → s3://hv-fim-dev-data/hec-ras/...
+  s3_key:           hv-fim-dev-data/hec-ras/...      →                    hec-ras/...
 
 After running this script, re-sync the corrected JSONs to S3:
   aws s3 sync <catalog_dir>/ s3://hv-fim-dev-stac/hec-ras-stac/
@@ -40,12 +44,14 @@ DEFAULT_DEST_PREFIX = "hv-fim-dev-data"
 
 
 def _rewrite_assets(assets: dict[str, Any], source: str, dest: str) -> tuple[dict[str, Any], int]:
-    """Rewrite href fields in an assets dict. Returns (updated_assets, rewrite_count)."""
+    """Rewrite href and s3_key fields in an assets dict. Returns (updated_assets, rewrite_count)."""
     count = 0
     for asset_data in assets.values():
         href = asset_data.get("href", "")
         if href.startswith(f"s3://{source}/"):
-            asset_data["href"] = "s3://" + dest + "/" + href[len(f"s3://{source}/"):]
+            key = href[len(f"s3://{source}/"):]
+            asset_data["href"] = f"s3://{dest}/{key}"
+            asset_data["s3_key"] = key
             count += 1
     return assets, count
 
