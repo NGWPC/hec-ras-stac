@@ -4,8 +4,9 @@ Rewrite S3 asset HREFs in a live pgSTAC database to use the asset-proxy service.
 Run this after load_catalog.py to make private S3 assets accessible via browser
 through the asset-proxy (port 8083).
 
-Only the `href` field on each asset is rewritten. The `s3_key` field is left
-untouched — it holds the real S3 key for direct boto3 access.
+Only the `href` field on each asset is rewritten. This script leaves `s3_key`
+untouched — it holds the real S3 key for direct boto3 access, and was already
+rebased onto the destination bucket upstream by rewrite_catalog_hrefs.py.
 
 Uses a single SQL UPDATE — no per-row Python loop. Idempotent: re-running when
 nothing needs rewriting prints "Nothing to do."
