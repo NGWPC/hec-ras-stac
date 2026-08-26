@@ -52,6 +52,8 @@ PROGRAMS = [
     ("ble_", "ble"),
     ("mip_", "mip"),
     ("ohio_rfc", "ohio_rfc"),
+    ("mn_", "mn"),
+    ("nc_", "nc"),
 ]
 
 

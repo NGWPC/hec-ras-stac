@@ -1,6 +1,6 @@
 # HEC-RAS STAC
 
-This repository houses the deployment and migration of the HEC-RAS STAC Catalog and its referenced assets — ~158,000 HEC-RAS flood inundation models served via pgSTAC + stac-fastapi + STAC Browser + asset-proxy on a single EC2 instance.
+This repository houses the deployment and migration of the HEC-RAS STAC Catalog and its referenced assets — ~166,000 HEC-RAS flood inundation models served via pgSTAC + stac-fastapi + STAC Browser + asset-proxy on a single EC2 instance.
 
 ![ETL Pipeline](ras-stac-etl-pipeline.drawio.png)
 
@@ -31,7 +31,8 @@ hec-ras-stac/
 │   ├── terraform/       # Infrastructure-as-code (main.tf, variables.tf, user-data)
 │   └── Deployment_Runbook.md
 ├── catalog-ops/         # Scripts run on EC2 post-deploy (load, rewrite, verify)
-│   └── Catalog_Operations.md
+│   ├── Catalog_Operations.md
+│   └── Model_Integration_Guide.md
 └── migration-archive/   # One-time ETL: generate STAC catalog from source HEC-RAS data (completed)
 ```
 
@@ -57,3 +58,8 @@ Deployment follows two sequential phases:
    From the running EC2: sync catalog JSONs locally, load them into pgSTAC, rewrite asset URLs to point at the OWP serving buckets, and verify the asset proxy end-to-end.
 
 Phase 2 cannot start until Phase 1 is complete (healthy stack, repo cloned to `/opt/hec-ras-stac/repo`).
+
+Onboarding a new state, program, or vendor delivery into the catalog after the
+initial deployment (not part of the two phases above) is covered separately in
+[`catalog-ops/Model_Integration_Guide.md`](catalog-ops/Model_Integration_Guide.md),
+which includes a worked example from integrating NC/MN model deliveries.

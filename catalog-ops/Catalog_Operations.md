@@ -17,7 +17,7 @@ commands run on the EC2 instance.
 |---|---|
 | STAC bucket | `s3://hv-fim-dev-stac/hec-ras-stac/` |
 | Data bucket | `s3://hv-fim-dev-data/hec-ras/` |
-| Catalog scale | 158,173 items, 1,139 collections (`ble_*`, `mip_*`, `ohio_rfc`) |
+| Catalog scale | 166,607 items, 1,431 collections (`ble_*`, `mip_*`, `ohio_rfc`, `mn_*`, `nc_*`) |
 
 Scripts live at `/opt/hec-ras-stac/repo/catalog-ops/`, cloned from `https://github.com/NGWPC/hec-ras-stac` (`catalog-ops` branch) in Deployment Runbook Phase 2.4.
 
@@ -34,18 +34,18 @@ mkdir -p ~/hec-ras-catalog
 aws s3 sync s3://hv-fim-dev-stac/hec-ras-stac/ ~/hec-ras-catalog/
 ```
 
-Expected: ~159,316 objects (catalog.json, 4 program catalogs, 1,139
-collection.json files, 158,173 item JSONs). Takes a few minutes.
+Expected: ~168,039 objects (catalog.json, 6 program catalogs, 1,431
+collection.json files, 166,607 item JSONs). Takes a few minutes.
 
 ### 1.2 Verify Sync
 ```bash
 ls ~/hec-ras-catalog/
-# Expected: catalog.json  ble/  mip/  ohio_rfc/
+# Expected: catalog.json  ble/  mip/  ohio_rfc/ mn/ nc/
 
 # Spot-check counts
-find ~/hec-ras-catalog -name "collection.json" | wc -l   # 1139
+find ~/hec-ras-catalog -name "collection.json" | wc -l   # 1431
 find ~/hec-ras-catalog -name "*.json" \
-  ! -name "catalog.json" ! -name "collection.json" | wc -l  # 158173
+  ! -name "catalog.json" ! -name "collection.json" | wc -l  # 166607
 ```
 
 ---
@@ -62,12 +62,12 @@ python3 /opt/hec-ras-stac/repo/catalog-ops/load_catalog.py \
   ~/hec-ras-catalog --db-host localhost --dry-run
 ```
 
-Expected output: `Layout: destination`, `Collections: 1139`, `Items: 158173`,
+Expected output: `Layout: destination`, `Collections: 1431`, `Items: 166607`,
 no "has no collection field" warnings.
 
 ### 2.2 Load
 
-Run in `tmux` or `screen` — the full 158k load takes ~1 hour.
+Run in `tmux` or `screen` — the full 166k load takes ~1 hour.
 
 ```bash
 sudo python3 /opt/hec-ras-stac/repo/catalog-ops/load_catalog.py \
@@ -80,16 +80,18 @@ If the terminal disconnects mid-run, verify completion via DB counts in 2.3 — 
 ```bash
 # DB counts
 docker exec -i hec-ras-stac-db psql -U pgstac -d stacdb -c \
-  "SELECT COUNT(*) FROM pgstac.collections;"   # 1139
+  "SELECT COUNT(*) FROM pgstac.collections;"   # 1431
 
 docker exec -i hec-ras-stac-db psql -U pgstac -d stacdb -c \
-  "SELECT COUNT(*) FROM pgstac.items;"          # 158173
+  "SELECT COUNT(*) FROM pgstac.items;"          # 166607
 
 # Verify no unexpected collections (should return 0 rows)
 docker exec -i hec-ras-stac-db psql -U pgstac -d stacdb -c \
   "SELECT id FROM pgstac.collections
    WHERE id NOT LIKE 'ble_%'
    AND id NOT LIKE 'mip_%'
+   AND id NOT LIKE 'mn_%'
+   AND id NOT LIKE 'nc_%'
    AND id != 'ohio_rfc'
    ORDER BY id;"
 
@@ -245,7 +247,7 @@ curl -s -o /dev/null -w "Proxy:   %{http_code}\n" http://${EC2_IP}:8083/health
 ### 4.5 STAC Browser UI
 
 Open `http://<domain>:8080` in a browser. Verify:
-- Collections list renders (1,139 collections)
+- Collections list renders (1,431 collections)
 - Navigating into a collection shows items with geometry on the map
 - Expanding an asset and clicking Download streams the file (not 403)
 
@@ -362,7 +364,7 @@ free -h
 - [ ] Elastic IP or DNS configured (optional)
 
 **Catalog & Assets**
-- [ ] S3 catalog synced (`hv-fim-dev-stac/hec-ras-stac/`) — 158,173 items, 1,139 collections
+- [ ] S3 catalog synced (`hv-fim-dev-stac/hec-ras-stac/`) — 166,607 items, 1,431 collections
 - [ ] Asset HREFs rewritten to proxy URLs (no `s3://` HREFs remain in pgSTAC)
 
 **Application**
@@ -374,7 +376,7 @@ free -h
 **Testing**
 - [ ] Health check script passes (`/opt/hec-ras-stac/deployment/health-check.sh`)
 - [ ] API endpoints validated (root, conformance, collections, search, bbox)
-- [ ] DB item count matches S3 catalog (158,173 items, 1,139 collections)
+- [ ] DB item count matches S3 catalog (166,607 items, 1,431 collections)
 - [ ] Asset proxy test passes (`test_asset_proxy.sh`)
 - [ ] QGIS plugin connects and renders footprints
 
